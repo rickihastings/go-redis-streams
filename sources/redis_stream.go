@@ -15,7 +15,6 @@ type RedisStream struct {
 	step    string
 	redisdb *redis.Client
 	ctx     context.Context
-	channel chan []map[string]interface{}
 }
 
 // NewRedisStream implements a new RedisStream instance
@@ -34,7 +33,6 @@ func NewRedisStream(config *redis.Options, name, step string) (*RedisStream, err
 		step,
 		redisdb,
 		ctx,
-		make(chan []map[string]interface{}),
 	}
 
 	return source, nil
@@ -44,7 +42,7 @@ func NewRedisStream(config *redis.Options, name, step string) (*RedisStream, err
 func (r *RedisStream) Push(id string, record interface{}, shard *types.Shard) error {
 	return r.redisdb.XAdd(r.ctx, &redis.XAddArgs{
 		Stream: r.name,
-		Values: map[string]interface{}{
+		Values: types.Message{
 			"metadata": &types.Metadata{},
 			"shard":    shard,
 			"record":   record,
@@ -53,7 +51,7 @@ func (r *RedisStream) Push(id string, record interface{}, shard *types.Shard) er
 }
 
 // Read starts to read from ConsumerCount at rate of BatchSize
-func (r *RedisStream) Read(options types.ReadOptions) error {
+func (r *RedisStream) Read(options *types.ReadOptions, channel types.Channel) {
 	// Set some sensible defaults
 	if options.ConcurrencyCount == 0 {
 		options.ConcurrencyCount = 1
@@ -72,37 +70,29 @@ func (r *RedisStream) Read(options types.ReadOptions) error {
 	semaphore := make(chan struct{}, options.ConcurrencyCount)
 	defer close(semaphore)
 
-	go func() {
-		for {
-			// Increment the wait group abd block
-			i++
-			wg.Add(1)
-			semaphore <- struct{}{}
+	for {
+		// Increment the wait group abd block
+		i++
+		wg.Add(1)
+		semaphore <- struct{}{}
 
-			go func(i int) {
-				err := r.Consume(i, options.BatchSize)
+		go func(i int) {
+			err := r.Consume(i, options.BatchSize, channel)
 
-				// Panic on an error - not sure what you'd do here, but it's possible to
-				// get stuck in a loop of spewing errors out which isn't ideal.
-				if err != nil {
-					panic(err)
-				}
+			// Panic on an error - not sure what you'd do here, but it's possible to
+			// get stuck in a loop of spewing errors out which isn't ideal.
+			if err != nil {
+				panic(err)
+			}
 
-				wg.Done()
-				<-semaphore
-			}(i)
-		}
-	}()
-
-	for messages := range r.channel {
-		options.Process(messages)
+			wg.Done()
+			<-semaphore
+		}(i)
 	}
-
-	return nil
 }
 
 // Consume will consume messages from the stream
-func (r *RedisStream) Consume(i int, batchSize int64) error {
+func (r *RedisStream) Consume(i int, batchSize int64, channel types.Channel) error {
 	res, err := r.redisdb.XReadGroup(r.ctx, &redis.XReadGroupArgs{
 		Group:    r.step,
 		Consumer: fmt.Sprintf("consumer-%d", i),
@@ -115,7 +105,7 @@ func (r *RedisStream) Consume(i int, batchSize int64) error {
 	}
 
 	for _, stream := range res {
-		batch := make([]map[string]interface{}, 0)
+		batch := make([]types.Message, 0)
 
 		for _, message := range stream.Messages {
 
@@ -133,7 +123,7 @@ func (r *RedisStream) Consume(i int, batchSize int64) error {
 				}
 			}
 
-			msg := map[string]interface{}{
+			msg := types.Message{
 				"metadata": metadata,
 				"shard":    shard,
 				"record":   message.Values["record"],
@@ -144,7 +134,7 @@ func (r *RedisStream) Consume(i int, batchSize int64) error {
 			batch = append(batch, msg)
 		}
 
-		r.channel <- batch
+		channel <- batch
 	}
 
 	return nil

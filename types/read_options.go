@@ -4,5 +4,4 @@ package types
 type ReadOptions struct {
 	ConcurrencyCount int
 	BatchSize        int64
-	Process          func(messages []map[string]interface{})
 }
