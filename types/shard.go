@@ -1,8 +1,6 @@
 package types
 
-import (
-	"github.com/vmihailenco/msgpack/v5"
-)
+import "encoding/json"
 
 // Shard is a type used to group elements from the same set together
 type Shard struct {
@@ -11,10 +9,10 @@ type Shard struct {
 
 // MarshalBinary is required to marshal nested objects in redis streams
 func (o *Shard) MarshalBinary() (data []byte, err error) {
-	return msgpack.Marshal(o)
+	return json.Marshal(o)
 }
 
 // UnmarshalBinary unmarshalls binary objects
 func (o *Shard) UnmarshalBinary(data []byte) error {
-	return msgpack.Unmarshal(data, o)
+	return json.Unmarshal(data, o)
 }

@@ -1,10 +1,14 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
+	"sync"
 
+	"github.com/go-redis/redis/v8"
+	"github.com/rickihastings/go-redis-streams/sources"
 	"github.com/rickihastings/go-redis-streams/types"
-	"github.com/vmihailenco/msgpack"
 )
 
 type Payload struct {
@@ -13,21 +17,21 @@ type Payload struct {
 
 // MarshalBinary is required to marshal nested objects in redis streams
 func (o *Payload) MarshalBinary() (data []byte, err error) {
-	return msgpack.Marshal(o)
+	return json.Marshal(o)
 }
 
 // UnmarshalBinary unmarshalls binary objects
 func (o *Payload) UnmarshalBinary(data []byte) error {
-	return msgpack.Unmarshal(data, o)
+	return json.Unmarshal(data, o)
 }
 
 func main() {
-	// stream, err := sources.NewRedisStream(&redis.Options{
-	// 	Addr: os.Getenv("HOST"),
-	// }, "example", "ingest")
-	// if err != nil {
-	// 	panic(err)
-	// }
+	stream, err := sources.NewRedisStream(&redis.Options{
+		Addr: os.Getenv("HOST"),
+	}, "example", "ingest")
+	if err != nil {
+		panic(err)
+	}
 
 	record := &Payload{
 		Hello: "World",
@@ -37,17 +41,23 @@ func main() {
 		ID: "1",
 	}
 
-	encoded, _ := record.MarshalBinary()
-	fmt.Println(encoded)
+	wg := sync.WaitGroup{}
+	semaphore := make(chan struct{}, 500)
+	defer close(semaphore)
 
-	encoded, _ = shard.MarshalBinary()
-	fmt.Println(encoded)
+	for i := 0; i < 1506; i++ {
+		go func(i int) {
+			wg.Add(1)
+			semaphore <- struct{}{}
 
-	panic("test")
+			if err := stream.Push(fmt.Sprintf("1-%d", i), record, shard); err != nil {
+				panic(err)
+			} else {
+				wg.Done()
+				<-semaphore
+			}
+		}(i)
+	}
 
-	// for i := 0; i < 1; i++ {
-	// 	if err := stream.Push(fmt.Sprintf("1-%d", i), record, shard); err != nil {
-	// 		panic(err)
-	// 	}
-	// }
+	wg.Wait()
 }

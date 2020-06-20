@@ -15,6 +15,7 @@ type RedisStream struct {
 	step    string
 	redisdb *redis.Client
 	ctx     context.Context
+	channel chan []map[string]interface{}
 }
 
 // NewRedisStream implements a new RedisStream instance
@@ -33,6 +34,7 @@ func NewRedisStream(config *redis.Options, name, step string) (*RedisStream, err
 		step,
 		redisdb,
 		ctx,
+		make(chan []map[string]interface{}),
 	}
 
 	return source, nil
@@ -44,8 +46,8 @@ func (r *RedisStream) Push(id string, record interface{}, shard *types.Shard) er
 		Stream: r.name,
 		Values: map[string]interface{}{
 			"metadata": &types.Metadata{},
-			// "shard":    shard,
-			// "record":   record,
+			"shard":    shard,
+			"record":   record,
 		},
 	}).Err()
 }
@@ -70,25 +72,33 @@ func (r *RedisStream) Read(options types.ReadOptions) error {
 	semaphore := make(chan struct{}, options.ConcurrencyCount)
 	defer close(semaphore)
 
-	for {
-		// Increment the wait group abd block
-		i++
-		wg.Add(1)
-		semaphore <- struct{}{}
+	go func() {
+		for {
+			// Increment the wait group abd block
+			i++
+			wg.Add(1)
+			semaphore <- struct{}{}
 
-		go func(i int) {
-			err := r.Consume(i, options.BatchSize)
+			go func(i int) {
+				err := r.Consume(i, options.BatchSize)
 
-			// Panic on an error - not sure what you'd do here, but it's possible to
-			// get stuck in a loop of spewing errors out which isn't ideal.
-			if err != nil {
-				panic(err)
-			}
+				// Panic on an error - not sure what you'd do here, but it's possible to
+				// get stuck in a loop of spewing errors out which isn't ideal.
+				if err != nil {
+					panic(err)
+				}
 
-			wg.Done()
-			<-semaphore
-		}(i)
+				wg.Done()
+				<-semaphore
+			}(i)
+		}
+	}()
+
+	for messages := range r.channel {
+		options.Process(messages)
 	}
+
+	return nil
 }
 
 // Consume will consume messages from the stream
@@ -105,9 +115,36 @@ func (r *RedisStream) Consume(i int, batchSize int64) error {
 	}
 
 	for _, stream := range res {
+		batch := make([]map[string]interface{}, 0)
+
 		for _, message := range stream.Messages {
-			fmt.Println(message)
+
+			metadata := &types.Metadata{}
+			if rawMetadata, ok := message.Values["metadata"].(string); ok {
+				if err := metadata.UnmarshalBinary([]byte(rawMetadata)); err != nil {
+					return err
+				}
+			}
+
+			shard := &types.Shard{}
+			if rawShard, ok := message.Values["shard"].(string); ok {
+				if err := shard.UnmarshalBinary([]byte(rawShard)); err != nil {
+					return err
+				}
+			}
+
+			msg := map[string]interface{}{
+				"metadata": metadata,
+				"shard":    shard,
+				"record":   message.Values["record"],
+			}
+
+			r.redisdb.XAck(r.ctx, r.name, r.step, message.ID)
+
+			batch = append(batch, msg)
 		}
+
+		r.channel <- batch
 	}
 
 	return nil
