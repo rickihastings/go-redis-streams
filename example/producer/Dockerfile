@@ -3,8 +3,8 @@ FROM golang:latest AS builder
 ENV GOPATH=/go
 ENV HOST=redis:6379
 
-ADD . /go/src/github.com/rickihastings/go-redis-streams/example/consumer
-WORKDIR /go/src/github.com/rickihastings/go-redis-streams/example/consumer
+ADD . /go/src/github.com/rickihastings/go-redis-streams/example/producer
+WORKDIR /go/src/github.com/rickihastings/go-redis-streams/example/producer
 
 RUN set -x && go get all ./...
 

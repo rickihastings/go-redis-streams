@@ -39,19 +39,19 @@ func NewRedisStream(config *redis.Options, name, step string) (*RedisStream, err
 }
 
 // Push will push a record to the stream
-func (r *RedisStream) Push(id string, record types.Record, shard types.Shard) error {
-	values := record
-	record["_shard"] = shard
-
+func (r *RedisStream) Push(id string, record interface{}, shard *types.Shard) error {
 	return r.redisdb.XAdd(r.ctx, &redis.XAddArgs{
 		Stream: r.name,
-		ID:     fmt.Sprintf("%s-%s", id, shard.ID),
-		Values: values,
+		Values: map[string]interface{}{
+			"metadata": &types.Metadata{},
+			// "shard":    shard,
+			// "record":   record,
+		},
 	}).Err()
 }
 
 // Read starts to read from ConsumerCount at rate of BatchSize
-func (r *RedisStream) Read(options types.ReadOptions) {
+func (r *RedisStream) Read(options types.ReadOptions) error {
 	// Set some sensible defaults
 	if options.ConcurrencyCount == 0 {
 		options.ConcurrencyCount = 1
@@ -60,6 +60,9 @@ func (r *RedisStream) Read(options types.ReadOptions) {
 	if options.BatchSize == 0 {
 		options.BatchSize = 1000
 	}
+
+	// Setup the stream for reading, we need a consumer group
+	r.redisdb.XGroupCreateMkStream(r.ctx, r.name, r.step, "$")
 
 	// Create a waitgroup of concurrency size
 	i := 0
@@ -75,8 +78,11 @@ func (r *RedisStream) Read(options types.ReadOptions) {
 
 		go func(i int) {
 			err := r.Consume(i, options.BatchSize)
+
+			// Panic on an error - not sure what you'd do here, but it's possible to
+			// get stuck in a loop of spewing errors out which isn't ideal.
 			if err != nil {
-				fmt.Println(err)
+				panic(err)
 			}
 
 			wg.Done()

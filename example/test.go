@@ -22,13 +22,6 @@ func (o *Payload) UnmarshalBinary(data []byte) error {
 }
 
 func main() {
-	// stream, err := sources.NewRedisStream(&redis.Options{
-	// 	Addr: os.Getenv("HOST"),
-	// }, "example", "ingest")
-	// if err != nil {
-	// 	panic(err)
-	// }
-
 	record := &Payload{
 		Hello: "World",
 	}
@@ -42,12 +35,4 @@ func main() {
 
 	encoded, _ = shard.MarshalBinary()
 	fmt.Println(encoded)
-
-	panic("test")
-
-	// for i := 0; i < 1; i++ {
-	// 	if err := stream.Push(fmt.Sprintf("1-%d", i), record, shard); err != nil {
-	// 		panic(err)
-	// 	}
-	// }
 }
