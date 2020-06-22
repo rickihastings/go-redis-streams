@@ -1,6 +1,10 @@
 package types
 
-type Message = map[string]interface{}
-type Channel = chan []Message
+type Message struct {
+	Metadata *Metadata
+	Shard    *Shard
+	Record   interface{}
+}
 
-type Processor = func(messages []Message) []Message
+type Channel = chan []Message
+type Processor = func(id *string, messages []Message) []Message

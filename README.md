@@ -7,4 +7,4 @@ Messing around with Redis Streams in Go
 
 # TODO
 - ~~`To()` - Should be able to stream into another data source~~
-- `Via()` - Should group and process messages on the shard
+- ~~`Via()` - Should group and process messages on the shard~~

@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"github.com/rickihastings/go-redis-streams/shard"
 	"github.com/rickihastings/go-redis-streams/types"
 )
 
@@ -19,13 +20,18 @@ type Pipeline struct {
 }
 
 // Via defines a Processor to pass the stream through, and returns an instance
-// of Pipeline so they can be changed for multiple steps.
+// of Pipeline so they can be changed for multiple steps. This also batches messages
+// up via the shard, so you can safely assume any messages in process() are part of
+// the same job and are due to be processed together. If you don't need this functionality
+// simply pass an empty Shard{} in and there will be no grouping.
 func (p *Pipeline) Via(process types.Processor) *Pipeline {
 	output := make(types.Channel)
 
 	go func() {
 		for messages := range p.input {
-			output <- process(messages)
+			for id, grouped := range shard.GroupBy(messages) {
+				output <- process(&id, grouped)
+			}
 		}
 	}()
 

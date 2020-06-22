@@ -39,10 +39,10 @@ func NewRedisStream(config *redis.Options, name, step string) (*RedisStream, err
 }
 
 // Push will push a record to the stream
-func (r *RedisStream) Push(id string, record interface{}, shard *types.Shard) error {
+func (r *RedisStream) Push(record interface{}, shard *types.Shard) error {
 	return r.redisdb.XAdd(r.ctx, &redis.XAddArgs{
 		Stream: r.name,
-		Values: types.Message{
+		Values: map[string]interface{}{
 			"metadata": &types.Metadata{},
 			"shard":    shard,
 			"record":   record,
@@ -124,9 +124,9 @@ func (r *RedisStream) Consume(i int, batchSize int64, channel types.Channel) err
 			}
 
 			msg := types.Message{
-				"metadata": metadata,
-				"shard":    shard,
-				"record":   message.Values["record"],
+				Metadata: metadata,
+				Shard:    shard,
+				Record:   message.Values["record"],
 			}
 
 			r.redisdb.XAck(r.ctx, r.name, r.step, message.ID)

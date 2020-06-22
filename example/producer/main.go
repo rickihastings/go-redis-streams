@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"sync"
 
 	"github.com/go-redis/redis/v8"
@@ -31,10 +32,6 @@ func main() {
 		panic(err)
 	}
 
-	record := &Payload{
-		Hello: "World",
-	}
-
 	shard := &types.Shard{
 		ID: "1",
 	}
@@ -47,6 +44,10 @@ func main() {
 		go func(i int) {
 			wg.Add(1)
 			semaphore <- struct{}{}
+
+			record := &Payload{
+				Hello: fmt.Sprintf("World %d", i),
+			}
 
 			if err := stream.Push(record, shard); err != nil {
 				panic(err)

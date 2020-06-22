@@ -10,9 +10,9 @@ import (
 	"github.com/rickihastings/go-redis-streams/types"
 )
 
-func process(messages []types.Message) []types.Message {
+func process(id *string, messages []types.Message) []types.Message {
 	for _, msg := range messages {
-		fmt.Println("Consumer1:", msg)
+		fmt.Println("Consumer1:", id, msg)
 	}
 
 	return messages
