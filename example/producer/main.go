@@ -2,8 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
-	"os"
 	"sync"
 
 	"github.com/go-redis/redis/v8"
@@ -27,7 +25,7 @@ func (o *Payload) UnmarshalBinary(data []byte) error {
 
 func main() {
 	stream, err := sources.NewRedisStream(&redis.Options{
-		Addr: os.Getenv("HOST"),
+		Addr: "0.0.0.0:6379",
 	}, "example", "ingest")
 	if err != nil {
 		panic(err)
@@ -50,7 +48,7 @@ func main() {
 			wg.Add(1)
 			semaphore <- struct{}{}
 
-			if err := stream.Push(fmt.Sprintf("1-%d", i), record, shard); err != nil {
+			if err := stream.Push(record, shard); err != nil {
 				panic(err)
 			} else {
 				wg.Done()

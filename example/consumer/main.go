@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"os"
+	"time"
 
 	"github.com/go-redis/redis/v8"
 	"github.com/rickihastings/go-redis-streams/pipeline"
@@ -10,28 +10,20 @@ import (
 	"github.com/rickihastings/go-redis-streams/types"
 )
 
-// var total = 0
-
 func process(messages []types.Message) []types.Message {
 	for _, msg := range messages {
-		// total++
-
-		// if total%100 == 0 {
-		// 	fmt.Println(i, total)
-		// }
-
-		// if total == 1506 {
-		//	fmt.Println("DONE", total)
-		// }
-		fmt.Println(msg)
+		fmt.Println("Consumer1:", msg)
 	}
 
 	return messages
 }
 
 func main() {
+	// Wait until redis is ready
+	time.Sleep(1 * time.Second)
+
 	stream, err := sources.NewRedisStream(&redis.Options{
-		Addr: os.Getenv("HOST"),
+		Addr: "redis:6379",
 	}, "example", "ingest")
 	if err != nil {
 		panic(err)

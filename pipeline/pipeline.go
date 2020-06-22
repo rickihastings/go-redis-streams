@@ -1,8 +1,6 @@
 package pipeline
 
 import (
-	"fmt"
-
 	"github.com/rickihastings/go-redis-streams/types"
 )
 
@@ -10,7 +8,7 @@ import (
 // source, and then also push to them, an example would be Redis Streams, Redis Blocking
 // lists, Kafka, Kinesis, etc.
 type Source interface {
-	Push(string, interface{}, *types.Shard) error
+	Push(interface{}, *types.Shard) error
 	Read(*types.ReadOptions, types.Channel)
 }
 
@@ -26,10 +24,8 @@ func (p *Pipeline) Via(process types.Processor) *Pipeline {
 	output := make(types.Channel)
 
 	go func() {
-		for msg := range p.input {
-			fmt.Println(msg)
-
-			output <- process(msg)
+		for messages := range p.input {
+			output <- process(messages)
 		}
 	}()
 
@@ -38,11 +34,21 @@ func (p *Pipeline) Via(process types.Processor) *Pipeline {
 	}
 }
 
+// To allows you to stream messages back into another data source for processing
+// elsewhere
+func (p *Pipeline) To(sink Source) {
+	for messages := range p.input {
+		for _, message := range messages {
+			sink.Push(message.Record, message.Shard)
+		}
+	}
+}
+
 // Wait ensures the channel is never closed so the process runs continually
 // If you're processing constant workflows you'll either want to call this or To()
 func (p *Pipeline) Wait() {
-	for _ = range p.input {
-
+	for range p.input {
+		// no-op
 	}
 }
 

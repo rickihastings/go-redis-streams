@@ -1,0 +1,16 @@
+version: "3.2"
+
+services:
+  redis:
+    image: redis:alpine
+    ports:
+      - 6379:6379
+  consumer:
+    build: 
+      context: ./
+      dockerfile: ./example/consumer/Dockerfile
+    command: ["./main"]
+    depends_on:
+      - redis
+    links:
+      - redis
